@@ -47,6 +47,18 @@ AC_SUBST(LT_CURRENT)
 AC_SUBST(LT_REVISION)
 AC_SUBST(LT_AGE)
 
+AC_ARG_ENABLE([coverage],
+     [AC_HELP_STRING([--enable-coverage], [enable instrumented compilation for code coverage testing (default=no)])],
+     [case "${enableval}" in
+       yes) coverage=yes ;;
+       no)  coverage=no ;;
+       *) AC_MSG_ERROR([bad value ${enableval} for --enable-coverage]) ;;
+     esac], [coverage=no])
+
+if test "$coverage" = "yes"; then
+   CXXFLAGS="$CXXFLAGS --coverage"
+fi
+
 #
 # Checks for programs.
 #
