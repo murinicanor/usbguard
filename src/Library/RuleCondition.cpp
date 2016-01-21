@@ -29,6 +29,7 @@ namespace usbguard
 
   RuleCondition::~RuleCondition()
   {
+    fini();
   }
 
   void RuleCondition::init(Interface * const interface_ptr)
@@ -40,9 +41,9 @@ namespace usbguard
   {
   }
 
-  bool RuleCondition::evaluate()
+  bool RuleCondition::evaluate(const Rule& rule)
   {
-    return isNegated() ? !update() : update();
+    return isNegated() ? !update(rule) : update(rule);
   }
 
   const String& RuleCondition::identifier() const
