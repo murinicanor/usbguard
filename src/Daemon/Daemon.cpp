@@ -57,7 +57,8 @@ namespace usbguard
   };
 
   Daemon::Daemon()
-    : _config(G_config_known_names)
+    : _config(G_config_known_names),
+      _ruleset(this)
   {
     G_qb_loop = _qb_loop = qb_loop_create();
 
@@ -221,7 +222,7 @@ namespace usbguard
     const Rule rule = Rule::fromString(rule_spec);
     /* TODO: reevaluate the firewall rules for all active devices */
     logger->debug("Appending rule: {}", rule_spec);
-    const uint32_t seqn = _ruleset.appendRule(rule, parent_seqn, this);
+    const uint32_t seqn = _ruleset.appendRule(rule, parent_seqn);
     if (_config.hasSettingValue("RuleFile")) {
       _ruleset.save(_config.getSettingValue("RuleFile"));
     }
@@ -238,15 +239,9 @@ namespace usbguard
     return;
   }
 
-  const std::map<std::string, std::string> Daemon::listRules()
+  const RuleSet Daemon::listRules()
   {
-    std::map<std::string, std::string> rules;
-
-    for(auto const& rule : _ruleset.getRules()) {
-      rules[std::to_string(rule->getSeqn())] = rule->toString();
-    }
-
-    return rules;
+    return _ruleset;
   }
 
   void Daemon::allowDevice(uint32_t seqn, bool append, uint32_t timeout_sec)
@@ -677,7 +672,16 @@ namespace usbguard
         removeRule(jobj["seqn"]);
       }
       else if (name == "listRules") {
-        retval["retval"] = listRules();
+        json ruleset_json = json::array();
+        RuleSet ruleset = listRules();
+        for (auto rule : ruleset.getRules()) {
+          json rule_json = {
+            { "seqn", rule->getSeqn() },
+            { "rule", rule->toString() }
+          };
+          ruleset_json.push_back(rule_json);
+        }
+        retval["retval"] = ruleset_json;
       }
       else if (name == "allowDevice") {
         allowDevice(jobj["seqn"], jobj["append"], jobj["timeout_sec"]);
@@ -689,7 +693,15 @@ namespace usbguard
         rejectDevice(jobj["seqn"], jobj["append"], jobj["timeout_sec"]);
       }
       else if (name == "listDevices") {
-        retval["retval"] = listDevices(jobj["query"]);
+        json devices_json = json::array();
+        for (auto device_rule : listDevices(jobj["query"])) {
+          json device_json = {
+            { "seqn", device_rule.getSeqn() },
+            { "device", device_rule.toString() }
+          };
+          devices_json.push_back(device_json);
+        }
+        retval["retval"] = devices_json;
       }
       else {
         throw 0;
@@ -1007,13 +1019,13 @@ namespace usbguard
     return;
   }
 
-  const std::map<std::string, std::string> Daemon::listDevices(const std::string& query)
+  const std::vector<Rule> Daemon::listDevices(const std::string& query)
   {
-    std::map<std::string, std::string> device_rules;
+    std::vector<Rule> device_rules;
     const Rule query_rule = Rule::fromString(query);
 
     for (auto const& device : _dm->getDeviceList(query_rule)) {
-      device_rules[std::to_string(device->getSeqn())] = device->getDeviceRule()->toString();
+      device_rules.push_back(*device->getDeviceRule());
     }
 
     return device_rules;
