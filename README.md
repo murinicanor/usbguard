@@ -1,3 +1,34 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [USBGuard](#usbguard)
+  - [Component View](#component-view)
+  - [Use Cases](#use-cases)
+    - [Use case #1: USB device whitelisting](#use-case-1-usb-device-whitelisting)
+    - [Use case #2: USB device blacklisting](#use-case-2-usb-device-blacklisting)
+    - [Use case #3: Triggering actions on USB device events](#use-case-3-triggering-actions-on-usb-device-events)
+  - [Supported Operating Systems](#supported-operating-systems)
+    - [Portability](#portability)
+  - [Compilation](#compilation)
+  - [OS packages](#os-packages)
+    - [Fedora Linux, RHEL or CentOS](#fedora-linux-rhel-or-centos)
+    - [Gentoo](#gentoo)
+    - [Usage](#usage)
+  - [Rules](#rules)
+    - [Targets](#targets)
+    - [Device specification](#device-specification)
+    - [Conditions](#conditions)
+  - [Initial policy](#initial-policy)
+  - [Example policies](#example-policies)
+    - [Allow USB mass storage devices (USB flash disks) and block everything else](#allow-usb-mass-storage-devices-usb-flash-disks-and-block-everything-else)
+    - [Allow a specific Yubikey device to be connected via a specific port. Reject everything else on that port.](#allow-a-specific-yubikey-device-to-be-connected-via-a-specific-port-reject-everything-else-on-that-port)
+    - [Reject devices with suspicious combination of interfaces](#reject-devices-with-suspicious-combination-of-interfaces)
+    - [Allow a keyboard-only USB device only if there isn't already a USB device with a keyboard interface allowed](#allow-a-keyboard-only-usb-device-only-if-there-isnt-already-a-usb-device-with-a-keyboard-interface-allowed)
+    - [Play "Russian roulette" with USB devices](#play-russian-roulette-with-usb-devices)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 # USBGuard
 
 [![Build Status](https://travis-ci.org/dkopecek/usbguard.svg?branch=master)](https://travis-ci.org/dkopecek/usbguard)
@@ -9,6 +40,10 @@ The USBGuard software framework helps to protect your computer against rogue USB
 
  * [Report a bug or request a feature in **usbguard**](https://github.com/dkopecek/usbguard/issues/new)
  * [Report a bug or request a feature in **usbguard-applet-qt**](https://github.com/dkopecek/usbguard-applet-qt/issues/new)
+
+## Component View
+
+![USBGuard component diagram](doc/usbguard-component-diagram.png "USBGuard component diagram")
 
 ## Use Cases
 
@@ -73,17 +108,26 @@ And to generate the *configure* script, run:
 
 If you want to modify the lexer and/or the parser, you'll have to generate new source files for them. To learn how to do that, read [src/Library/RuleParser/README.md](src/Library/RuleParser/README.md).
 
-## Pre-compiled packages
+## OS packages
 
 ### Fedora Linux, RHEL or CentOS
 
-Pre-compiled packages for Fedora 20, 21, 22, rawhide and EPEL 7 (RHEL, CentOS) are distributes using a Copr [repository](https://copr.fedoraproject.org/coprs/mildew/usbguard/).
+Pre-compiled packages for Fedora 21, 22, 23, rawhide and EPEL 7 (RHEL, CentOS) are distributes using a Copr [repository](https://copr.fedoraproject.org/coprs/mildew/usbguard/).
 You can install the repository by executing the following steps:
 
     $ sudo yum install yum-plugin-copr
     $ sudo yum copr enable mildew/usbguard
     $ sudo yum install usbguard
     $ sudo yum install usbguard-applet-qt
+
+### Gentoo
+
+For Gentoo you can use the [stuge overlay](http://git.stuge.se/?p=stuge-overlay.git;a=summary) via layman:
+
+    $ layman -a stuge-overlay
+    $ emerge -av usbguard
+
+### Usage
 
 To actually start the daemon, use:
 
@@ -99,19 +143,19 @@ target. This implicit default is to block the device until a decision is made by
 
 The rule language grammar, expressed in a BNF-like syntax, is the following:
 
-    rule ::= target device.
+    rule ::= target device_id device_attributes conditions.
 
     target ::= "allow" | "block" | "reject".
-
-    device ::= device_id device_attributes.
-    device ::= .
 
     device_id ::= "*:*" | vendor_id ":*" | vendor_id ":" product_id.
 
     device_attributes ::= device_attributes | attribute.
     device_attributes ::= .
 
-See [Device attributes](https://github.com/dkopecek/usbguard#device-attributes) section for the list of available attributes and their syntax.
+    conditions ::= conditions | condition.
+    conditions ::= .
+
+See [Device attributes](https://github.com/dkopecek/usbguard#device-attributes) section for the list of available attributes and [Conditions](https://github.com/dkopecek/usbguard#conditions) for the list of supported rule conditions.
 
 ### Targets
 
@@ -164,9 +208,39 @@ List of attributes:
 
 `port-id` is a platform specific USB port identification. On Linux it's in the form "b-n" where `b` and `n` are unsigned integers (e.g. "1-2", "2-4", ...).
 
-`interface-type` represents a USB interface and should be formated as three 8-bit numbers in hexadecimal base delimited by colon, i.e. `cc:ss:pp`. The numbers represent the interface class (`cc`), subclass (`ss`) and protocol (`pp`) as assigned by the [USB-IF](www.usb.org/about) ([List of assigned classes, subclasses and protocols](http://www.usb.org/developers/defined_class)). Instead of the subclass and protocol number, you may write an asterisk character (`\*`) to match all subclasses or protocols. Matching a specific class and a specific protocol is not allowed, i.e. if you use an asterisk as the subclass number, you have to use an asterisk for the protocol too.
+`interface-type` represents a USB interface and should be formated as three 8-bit numbers in hexadecimal base delimited by colon, i.e. `cc:ss:pp`. The numbers represent the interface class (`cc`), subclass (`ss`) and protocol (`pp`) as assigned by the [USB-IF](http://www.usb.org/about) ([List of assigned classes, subclasses and protocols](http://www.usb.org/developers/defined_class)). Instead of the subclass and protocol number, you may write an asterisk character (`\*`) to match all subclasses or protocols. Matching a specific class and a specific protocol is not allowed, i.e. if you use an asterisk as the subclass number, you have to use an asterisk for the protocol too.
 
-### Initial policy
+### Conditions
+
+Whether a rule that matches a device will be applied or not can be further restricted using rule conditions. If the condition expression is met at the rule evaluation time, then the rule target is applied for the device. A condition expression is met if it evaluates to true. Otherwise, the rule evaluation continues with the next rule. A rule conditions has the following syntax:
+
+     if [!]condition
+     if [operator] { [!]conditionA [!]conditionB ... }
+
+Optionally, an exclamation mark (`!`) can be used to negate the result of a condition.
+
+Interpretation of the set operator:
+
+ * `all-of`: Evaluate to true if all of the specified conditions evaluated to true.
+ * `one-of`: Evaluate to true if one of the specified conditions evaluated to true.
+ * `none-of`: Evaluate to true if none of the specified conditions evaluated to true.
+ * `equals`: Same as `all-of`.
+ * `equals-ordered`: Same as `all-of`.
+
+List of conditions:
+
+ * `localtime(time_range)`: Evaluates to true if the local time is in the specified time range. `time_range` can be written either as `HH:MM[:SS]` or `HH:MM[:SS]-HH:MM[:SS]`.
+ * `allowed-matches(query)`: Evaluates to true if an allowed device matches the specified query. The query uses the rule syntax. **Conditions in the query are not evaluated**.
+ * `rule-applied`: Evaluates to true if the rule currently being evaluated ever matched a device.
+ * `rule-applied(past_duration)`: Evaluates to true if the rule currently being evaluated matched a device in the past duration of time specified by the parameter. `past_duration` can be written as `HH:MM:SS`, `HH:MM`, or `SS`.
+ * `rule-evaluated`: Evaluates to true if the rule currently being evaluated was ever evaluated before.
+ * `rule-evaluated(past_duration)`: Evaluates to true if the rule currently being evaluated was evaluated in the pas duration of time specified by the parameter. `past_duration` can be written as `HH:MM:SS`, `HH:MM`, or `SS`.
+ * `random`: Evaluates to true/false with a probability of `p=0.5`.
+ * `random(p_true)`: Evaluates to true with the specified probability `p_true`.
+ * `true`: Evaluates always to true.
+ * `false`: Evaluates always to false.
+
+## Initial policy
 
 Using the `usbguard` CLI tool and its `generate-policy` subcommand, you can generate an initial policy for your system instead of writing one from scratch. The tool generates an **allow** policy for all devices connected to the system at the moment of execution. It has several options to tweak the resulting policy:
 
@@ -188,11 +262,11 @@ The policy will be printed out on the standard output. It's a good idea to revie
     # sudo install -m 0600 -o root -g root rules.conf /etc/usbguard/rules.conf
     # sudo systemctl restart usbguard
 
-### Example policies
+## Example policies
 
 The following examples show what to put into the `rules.conf` file in order to implement the given policy.
 
-#### Allow USB mass storage devices (USB flash disks) and block everything else
+### Allow USB mass storage devices (USB flash disks) and block everything else
 
 This policy will block any device that isn't just a mass storage device. Devices with a hidden keyboard interface in a USB flash disk will be blocked. Only devices with a single mass storage interface will be allowed to interact with the operating system. The policy consists of a single rule:
 
@@ -200,14 +274,14 @@ This policy will block any device that isn't just a mass storage device. Devices
 
 The blocking is implicit in this case because we didn't write a `block` rule. Implicit blocking is useful to desktop users because a desktop applet listening to USBGuard events can ask the user for a decision if an implicit target was selected for a device.
 
-#### Allow a specific Yubikey device to be connected via a specific port. Reject everything else on that port.
+### Allow a specific Yubikey device to be connected via a specific port. Reject everything else on that port.
 
     allow 1050:0011 name "Yubico Yubikey II" serial "0001234567" via-port "1-2" hash "044b5e168d40ee0245478416caf3d998"
     reject via-port "1-2"
 
 We could use just the hash to match the device. However, using the name and serial attributes allows the policy creator to quickly assign rules to specific devices without computing the hash. On the other hand, the hash is the most specific value we can use to identify a device in USBGuard so it's the best attribute to use if you want a rule to match just one device.
 
-#### Reject devices with suspicious combination of interfaces
+### Reject devices with suspicious combination of interfaces
 
 A USB flash disk which implements a keyboard or a network interface is very suspicious. The following set of rules forms a policy which allows USB flash disks and explicitly rejects devices with an additional and suspicious (as defined before) interface.
 
@@ -218,3 +292,13 @@ A USB flash disk which implements a keyboard or a network interface is very susp
     reject with-interface all-of { 08:*:* 02:*:* }
    
 The policy rejects all USB flash disk devices with an interface from the HID/Keyboard, Communications and Wireless classes. Please note that blacklisting is the wrong approach and you shouldn't just blacklist a set of devices and allow the rest. The policy above assumes that blocking is the implicit default. Rejecting a set of devices considered as "bad" is a good approach how to limit the exposure of the OS to such devices as much as possible.
+
+### Allow a keyboard-only USB device only if there isn't already a USB device with a keyboard interface allowed
+
+    allow with-interface one-of { 03:00:01 03:01:01 } if !allowed-matches(with-interface one-of { 03:00:01 03:01:01 })
+
+### Play "Russian roulette" with USB devices
+
+    allow if random(0.1666)
+    reject
+
