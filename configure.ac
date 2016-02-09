@@ -1,5 +1,5 @@
 AC_PREREQ([2.69])
-AC_INIT([usbguard], [0.4], [dkopecek@redhat.com])
+AC_INIT([usbguard], [0.5], [dkopecek@redhat.com])
 AC_CONFIG_SRCDIR([src/])
 AC_CONFIG_HEADERS([src/build-config.h])
 AC_CONFIG_MACRO_DIR([m4])
@@ -55,7 +55,7 @@ AC_ARG_ENABLE([coverage],
        *) AC_MSG_ERROR([bad value ${enableval} for --enable-coverage]) ;;
      esac], [coverage=no])
 
-if test "$coverage" = "yes"; then
+if test "x$coverage" = xyes; then
    CXXFLAGS="$CXXFLAGS --coverage"
 fi
 
@@ -115,8 +115,8 @@ libcap_ng_summary="not found"]
 # json C++ library
 #
 with_bundled_json=yes
-AC_ARG_WITH([bundled-json], AS_HELP_STRING([--with-bundled-json], [Build using the bundled json library]))
-if test "x$with_bundled_json" = "xyes"; then
+AC_ARG_WITH([bundled-json], AS_HELP_STRING([--with-bundled-json], [Build using the bundled json library]), [], [with_bundled_json=yes])
+if test "x$with_bundled_json" = xyes; then
 	json_CFLAGS="-I\$(top_srcdir)/src/ThirdParty/json/src"
 	json_LIBS=""
 	AC_MSG_NOTICE([Using bundled json library])
@@ -138,9 +138,8 @@ AC_SUBST([json_LIBS])
 #
 # spdlog C++ library
 #
-with_bundled_spdlog=yes
-AC_ARG_WITH([bundled-spdlog], AS_HELP_STRING([--with-bundled-spdlog], [Build using the bundled spdlog library]))
-if test "x$with_bundled_spdlog" = "xyes"; then
+AC_ARG_WITH([bundled-spdlog], AS_HELP_STRING([--with-bundled-spdlog], [Build using the bundled spdlog library]), [], [with_bundled_spdlog=yes])
+if test "x$with_bundled_spdlog" = xyes; then
 	spdlog_CFLAGS="-I\$(top_srcdir)/src/ThirdParty/spdlog/include"
 	spdlog_LIBS=""
 	AC_MSG_NOTICE([Using bundled spdlog library])
@@ -158,6 +157,33 @@ else
 fi
 AC_SUBST([spdlog_CFLAGS])
 AC_SUBST([spdlog_LIBS])
+
+#
+# Qt 5.x GUI
+#
+AC_ARG_WITH([gui-qt5], AS_HELP_STRING([--with-gui-qt5], [Build the Qt 5.x GUI components]), [], [with_gui_qt5=yes])
+if test "x$with_gui_qt5" = xyes; then
+  #
+  # Check for Qt 5.x libraries
+  #
+  PKG_CHECK_MODULES([qt5], [Qt5Gui >= 5.0 Qt5Widgets >= 5.0],
+  [AC_DEFINE([HAVE_QT5], [1], [Required Qt 5.x API available])
+  qt5_summary="system-wide; $qt5_CFLAGS $qt5_LIBS"],
+  [AC_MSG_FAILURE([Qt 5.x development files not found!])]
+  )
+
+  #
+  # Check for Qt 5.x build tools
+  #
+  AC_CHECK_PROGS(MOCQT5, [moc-qt5 moc])
+  AC_CHECK_PROGS(UICQT5, [uic-qt5 uic])
+  AC_CHECK_PROGS(RCCQT5, [rcc-qt5 rcc])
+  if test -z "$MOCQT5" || test -z "$UICQT5" || test -z "$RCCQT5"; then
+    AC_MSG_FAILURE([Qt 5.x build tools are missing on your system. Make sure that moc-qt5, uic-qt5 and rcc-qt5 are installed.])
+  fi
+else
+  qt5_summary="None; building without Qt 5.x GUI"
+fi
 
 # Checks for header files.
 AC_FUNC_ALLOCA
@@ -203,7 +229,7 @@ AC_ARG_ENABLE([systemd],
        *) AC_MSG_ERROR([bad value ${enableval} for --enable-systemd]) ;;
      esac], [systemd=no])
 
-if test "$debug" = "yes"; then
+if test "x$debug" = xyes; then
    CXXFLAGS="$CXXFLAGS $CXXFLAGS_DEBUG_ENABLED"
 else
    CXXFLAGS="$CXXFLAGS $CXXFLAGS_DEBUG_DISABLED"
@@ -211,11 +237,12 @@ else
    AC_DEFINE([QUEX_OPTION_ASSERTS_DISABLED], [1], [Disable asserts in the Quex generated lexer])
 fi
 
-if test "$systemd" = "yes"; then
+if test "x$systemd" = xyes; then
    AC_DEFINE([SYSTEMD_SUPPORT_ENABLED], [1], [Enable systemd support int the project])
 fi
 
-AM_CONDITIONAL([SYSTEMD_SUPPORT_ENABLED], [test "$systemd" = "yes" ])
+AM_CONDITIONAL([SYSTEMD_SUPPORT_ENABLED], [test "x$systemd" = xyes ])
+AM_CONDITIONAL([GUI_QT5_ENABLED], [test "x$with_gui_qt5" = xyes ])
 
 AC_CONFIG_FILES([Makefile libusbguard.pc src/Tests/Makefile])
 AC_OUTPUT
@@ -233,6 +260,7 @@ echo " libseccomp: $libseccomp_summary"
 echo "  libcap-ng: $libcap_ng_summary"
 echo "       json: $json_summary"
 echo "     spdlog: $spdlog_summary"
+echo "     Qt 5.x: $qt5_summary"
 echo
 echo "## Compilation Flags"
 echo
@@ -241,8 +269,4 @@ echo "   CXXFLAGS: $CXXFLAGS"
 echo "   CPPFLAGS: $CPPFLAGS"
 echo "    LDFLAGS: $LDFLAGS"
 echo
-echo "## Compile-Time Parameter Values"
-echo
-echo ""
-echo ""
-echo
+
