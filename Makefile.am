@@ -7,9 +7,10 @@ EXTRA_DIST =\
 
 BUILT_SOURCES=
 DISTCLEANFILES=
+CLEANFILES=
 
 if SYSTEMD_SUPPORT_ENABLED
-SYSTEMD_UNIT_DIR= /lib/systemd/system
+SYSTEMD_UNIT_DIR= /usr/lib/systemd/system
 
 install-data-hook:
 	mkdir -p $(DESTDIR)$(SYSTEMD_UNIT_DIR)
@@ -229,25 +230,123 @@ usbguard_rule_parser_LDADD=\
 	$(top_builddir)/libusbguard.la
 
 #
+# DBus Bridge
+#
+if DBUS_ENABLED
+sbin_PROGRAMS+= usbguard-dbus
+
+BUILT_SOURCES+=\
+	src/DBus/DBusInterface.xml.cstr \
+	src/DBus/org.usbguard.service
+
+EXTRA_DIST+=\
+	src/DBus/org.usbguard.conf \
+	src/DBus/org.usbguard.service.in \
+	src/DBus/org.usbguard.policy \
+	src/DBus/DBusInterface.xml
+
+CLEANFILES+=\
+	$(top_builddir)/src/DBus/org.usbguard.service \
+	$(top_builddir)/src/DBus/DBusInterface.xml.cstr
+
+usbguard_dbus_SOURCES=\
+	src/DBus/gdbus-server.cpp \
+	src/DBus/DBusBridge.cpp \
+	src/DBus/DBusBridge.hpp
+
+usbguard_dbus_CPPFLAGS=\
+	$(AM_CPPFLAGS) \
+	-I$(top_builddir)/src/DBus \
+	@spdlog_CFLAGS@ \
+	@dbus_CFLAGS@
+
+usbguard_dbus_LDADD=\
+	$(top_builddir)/libusbguard.la \
+	@dbus_LIBS@
+
+%.xml:
+	xmllint "$(top_srcdir)/$@" > /dev/null
+
+%.xml.cstr: %.xml
+	XMLLINT_INDENT="" xmllint --format "$<" |\
+	  sed -n -e 's|\"|\\"|g; s|.*|"&"|; p' > "$(top_builddir)/$@"
+
+%.service: %.service.in
+	sed -e "s|%{sbindir}%|$(sbindir)|" "$<" > "$(top_builddir)/$@"
+
+if POLICYKIT_ENABLED
+install-data-local: $(top_builddir)/src/DBus/org.usbguard.service
+	mkdir -p $(DESTDIR)$(POLKIT_POLICY_DIR) && \
+	  $(INSTALL_DATA) $(top_srcdir)/src/DBus/org.usbguard.policy $(DESTDIR)$(POLKIT_POLICY_DIR)
+	mkdir -p $(DESTDIR)$(DBUS_SERVICES_DIR) && \
+	  $(INSTALL_DATA) $(top_builddir)/src/DBus/org.usbguard.service $(DESTDIR)$(DBUS_SERVICES_DIR)
+	mkdir -p $(DESTDIR)$(DBUS_BUSCONFIG_DIR) && \
+	  $(INSTALL_DATA) $(top_srcdir)/src/DBus/org.usbguard.conf $(DESTDIR)$(DBUS_BUSCONFIG_DIR)
+
+uninstall-local:
+	rm -f $(DESTDIR)$(DBUS_SERVICES_DIR)/org.usbguard.service
+	rmdir $(DESTDIR)$(DBUS_SERVICES_DIR)
+	rm -f $(DESTDIR)$(DBUS_BUSCONFIG_DIR)/org.usbguard.conf
+	rmdir $(DESTDIR)$(DBUS_BUSCONFIG_DIR)
+	rm -f $(DESTDIR)$(POLKIT_POLICY_DIR)/org.usbguard.policy
+	rmdir $(DESTDIR)$(POLKIT_POLICY_DIR)
+
+else
+install-data-local: $(top_builddir)/src/DBus/org.usbguard.service
+	mkdir -p $(DESTDIR)$(DBUS_SERVICES_DIR) && \
+	  $(INSTALL_DATA) $(top_builddir)/src/DBus/org.usbguard.service $(DESTDIR)$(DBUS_SERVICES_DIR)
+	mkdir -p $(DESTDIR)$(DBUS_BUSCONFIG_DIR) && \
+	  $(INSTALL_DATA) $(top_srcdir)/src/DBus/org.usbguard.conf $(DESTDIR)$(DBUS_BUSCONFIG_DIR)
+
+uninstall-local:
+	rm -f $(DESTDIR)$(DBUS_SERVICES_DIR)/org.usbguard.service
+	rmdir $(DESTDIR)$(DBUS_SERVICES_DIR)
+	rm -f $(DESTDIR)$(DBUS_BUSCONFIG_DIR)/org.usbguard.conf
+	rmdir $(DESTDIR)$(DBUS_BUSCONFIG_DIR)
+
+endif #POLICYKIT_ENABLED
+endif #DBUS_ENABLED
+
+#
 # Qt 5.x GUI
 #
 if GUI_QT5_ENABLED
 bin_PROGRAMS+= usbguard-applet-qt
 
-EXTRA_DIST+=\
-	src/GUI.Qt5/icon.qrc \
-	src/GUI.Qt5/DeviceDialog.ui \
-	src/GUI.Qt5/MainWindow.ui
+desktopdir = $(datadir)/applications
+desktop_DATA = src/GUI.Qt5/usbguard-applet-qt.desktop
+
+appicondir = $(datadir)/icons/hicolor/scalable/apps
+appicon_DATA = src/GUI.Qt5/resources/usbguard-icon.svg
+
+dist_man1_MANS +=\
+	doc/usbguard-applet-qt.roff
 
 usbguard_applet_qt_UIHEADERS=\
 	src/GUI.Qt5/DeviceDialog.ui.h \
 	src/GUI.Qt5/MainWindow.ui.h
 
-BUILT_SOURCES+=\
-	$(usbguard_applet_qt_UIHEADERS)
+usbguard_applet_qt_RESOURCES=\
+	src/GUI.Qt5/resources/usbguard-icon.svg \
+	src/GUI.Qt5/resources/usbguard-icon-warning.svg
 
-DISTCLEANFILES +=\
-	$(usbguard_applet_qt_UIHEADERS)
+BUILT_SOURCES+=\
+	$(usbguard_applet_qt_UIHEADERS) \
+	src/GUI.Qt5/usbguard.qrc
+
+EXTRA_DIST+=\
+	src/GUI.Qt5/DeviceDialog.ui \
+	src/GUI.Qt5/MainWindow.ui \
+	src/GUI.Qt5/usbguard-applet-qt.desktop \
+	$(usbguard_applet_qt_RESOURCES)
+
+CLEANFILES +=\
+	$(usbguard_applet_qt_UIHEADERS) \
+	$(top_builddir)/src/GUI.Qt5/DeviceDialog.moc.cpp \
+	$(top_builddir)/src/GUI.Qt5/MainWindow.moc.cpp \
+	$(top_builddir)/src/GUI.Qt5/usbguard.qrc.cpp \
+	$(top_builddir)/src/GUI.Qt5/usbguard.qrc \
+	$(top_builddir)/src/GUI.Qt5/DeviceTableWidget.moc.cpp
 
 usbguard_applet_qt_SOURCES=\
 	src/GUI.Qt5/main.cpp \
@@ -257,7 +356,10 @@ usbguard_applet_qt_SOURCES=\
 	src/GUI.Qt5/MainWindow.cpp \
 	src/GUI.Qt5/MainWindow.h \
 	src/GUI.Qt5/MainWindow.moc.cpp \
-	src/GUI.Qt5/icon.qrc.cpp
+	src/GUI.Qt5/usbguard.qrc.cpp \
+	src/GUI.Qt5/DeviceTableWidget.h \
+	src/GUI.Qt5/DeviceTableWidget.cpp \
+	src/GUI.Qt5/DeviceTableWidget.moc.cpp
 
 usbguard_applet_qt_LDADD=\
 	$(top_builddir)/libusbguard.la \
@@ -271,12 +373,51 @@ usbguard_applet_qt_CPPFLAGS=\
 	-fPIC @qt5_CFLAGS@
 
 %.moc.cpp: %.h
-	@MOCQT5@ -o$@ $(DEFS) $(DEFAULT_INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(MOC_CPPFLAGS) $<
+	@MOCQT5@ -f"$(shell basename $<)" -I$(top_srcdir)/src/GUI.Qt5 -o$(top_builddir)/$@ $(DEFS) $(DEFAULT_INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(MOC_CPPFLAGS) $<
 
 %.ui.h: %.ui
-	@UICQT5@ -g cpp -o $@ $<
+	@UICQT5@ -g cpp -o $(top_builddir)/$@ $<
 
 %.qrc.cpp: %.qrc
-	@RCCQT5@ -o $@ $<
+	@RCCQT5@ -o $(top_builddir)/$@ $<
+
+%.qrc: $(usbguard_applet_qt_RESOURCES)
+	echo '<RCC>' > "$@.tmp"
+	echo '<qresource prefix="/">' >> "$@.tmp"
+	for file in $(usbguard_applet_qt_RESOURCES); do \
+	  base=$$(basename $$file); \
+	  echo "<file alias=\"$$base\">$(abs_top_srcdir)/$$file</file>" >> "$@.tmp"; \
+	done
+	echo '</qresource>' >> "$@.tmp"
+	echo '</RCC>' >> "$@.tmp"
+	mv "$@.tmp" "$@"
+
 endif
+
+srpm: dist
+	$(eval RPMBUILD_ROOT:=$(shell mktemp -d -t usbguard-srpm.XXXXXX))
+	$(eval RPMBUILD_SOURCES:=$(RPMBUILD_ROOT)/SOURCE)
+	$(eval RPMBUILD_SPECS:=$(RPMBUILD_ROOT)/SPECS)
+	$(eval RPMBUILD_BUILDS:=$(RPMBUILD_ROOT)/BUILDS)
+	mkdir -p $(RPMBUILD_SOURCES)
+	mkdir -p $(RPMBUILD_SPECS)
+	cp $(top_srcdir)/dist/usbguard-daemon.conf $(RPMBUILD_SOURCES)
+	cp $(top_srcdir)/dist/usbguard.spec $(RPMBUILD_SPECS)
+	cp $(top_builddir)/usbguard-*.tar.gz $(RPMBUILD_SOURCES)
+	rpmbuild -bs \
+		--define "_sourcedir $(RPMBUILD_SOURCES)" \
+		--define "_srcrpmdir $(top_builddir)" \
+		--define "_rpmdir $(top_builddir)" \
+		--define "_builddir $(RPMBUILD_BUILDS)" \
+		"$(RPMBUILD_SPECS)/usbguard.spec"
+	rm -rf "$(RPMBUILD_ROOT)"
+
+analyze-clang:
+	$(eval ANALYSIS_ROOT:=$(shell mktemp -d -t usbguard-analyze-clang.XXXXXX))
+	$(eval JOBS:=$(shell grep -c '^processor' /proc/cpuinfo 2> /dev/null || echo 1))
+	cd "$(ANALYSIS_ROOT)" && scan-build $(abs_top_srcdir)/configure
+	cd "$(ANALYSIS_ROOT)" && scan-build \
+	  --status-bugs -maxloop 8 -disable-checker deadcode.DeadStores -o "$(abs_top_builddir)" \
+	  make -j$(JOBS)
+	rm -rf "$(ANALYSIS_ROOT)"
 

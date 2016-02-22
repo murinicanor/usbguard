@@ -185,6 +185,76 @@ else
   qt5_summary="None; building without Qt 5.x GUI"
 fi
 
+#
+# GLib D-Bus
+#
+AC_ARG_WITH([dbus], AC_HELP_STRING([--with-dbus], [Build the DBus Bridge service]), [], [with_dbus=yes])
+if test "x$with_dbus" = xyes; then
+  #
+  # Check for required D-Bus modules 
+  #
+  PKG_CHECK_MODULES([dbus], [dbus-1 dbus-glib-1 >= 0.100 gio-2.0],
+  [AC_DEFINE([HAVE_DBUS], [1], [Required GLib DBus API available])
+  dbus_summary="system-wide; $dbus_CFLAGS $dbus_LIBS"],
+  [AC_MSG_FAILURE([Required D-Bus modules (dbus-1, dbus-glib-1, gio-2.0) not found!])]
+  )
+
+  #
+  # Check for xmllint tool
+  #
+  AC_CHECK_PROGS(XMLLINT, [xmllint])
+  if test -z "$XMLLINT" ; then
+    AC_MSG_FAILURE([The required xmllint tool missing on your system. Make sure that xmllint is installed.])
+  fi
+
+  dbus_services_dir=`$PKG_CONFIG dbus-1 --define-variable=datadir='${datadir}' --define-variable=prefix='${prefix}' --variable=system_bus_services_dir`
+  if test "x$dbus_services_dir" = x; then
+    AC_MSG_FAILURE([Cannot autodetect the D-Bus system services directory])
+  else
+    AC_SUBST(DBUS_SERVICES_DIR, $dbus_services_dir)
+    AC_DEFINE([DBUS_SERVICES_DIR], [$dbus_services_dir], [D-Bus system services directory])
+  fi
+
+  dbus_data_dir=`$PKG_CONFIG dbus-1 --define-variable=datadir='${datadir}' --define-variable=prefix='${prefix}' --variable=datadir`
+  if test "x$dbus_data_dir" = x; then
+    AC_MSG_FAILURE([Cannot autodetect the D-Bus data directory])
+  else
+    dbus_busconfig_dir="$dbus_data_dir/dbus-1/system.d"
+    AC_SUBST(DBUS_BUSCONFIG_DIR, $dbus_busconfig_dir)
+    AC_DEFINE([DBUS_BUSCONFIG_DIR], [$dbus_busconfig_dir], [D-Bus busconfig directory])
+  fi
+else
+  dbus_summary="None; building without DBus support"
+  dbus_services_dir=" -"
+  dbus_busconfig_dir=" -"
+fi
+
+#
+# PolicyKit
+#
+AC_ARG_WITH([polkit], AC_HELP_STRING([--with-polkit], [Install the PolicyKit configuration with if D-Bus support is also enabled]), [], [with_polkit=yes])
+if test "x$with_polkit" = xyes; then
+  #
+  # Check for required PolicyKit modules
+  #
+  PKG_CHECK_MODULES([polkit], [polkit-gobject-1],
+  [AC_DEFINE([HAVE_POLKIT], [1], [Required PolicyKit modules available])
+  polkit_summary="system-wide; `$PKG_CONFIG polkit-gobject-1 --define-variable=prefix='${prefix}' --define-variable=datadir='${datadir}' --variable=policydir`"],
+  [AC_MSG_FAILURE([Required PolicyKit modules (polkit-gobject-1) not found!])]
+  )
+
+  polkit_policy_dir="`$PKG_CONFIG polkit-gobject-1 --define-variable=prefix='${prefix}' --define-variable=datadir='${datadir}' --variable=policydir`"
+  if test "x$polkit_policy_dir" = x; then
+    AC_MSG_FAILURE([Cannot autodetect the PolicyKit policy directory])
+  else
+    AC_SUBST(POLKIT_POLICY_DIR, $polkit_policy_dir)
+    AC_DEFINE([POLKIT_POLICY_DIR], [$polkit_policy_dir], [PolicyKit policy directory]) 
+  fi
+else
+  polkit_summary="None; building without PolicyKit support"
+  polkit_policy_dir=" -"
+fi
+
 # Checks for header files.
 AC_FUNC_ALLOCA
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h inttypes.h limits.h locale.h netdb.h stdint.h stdlib.h string.h sys/time.h syslog.h unistd.h wchar.h])
@@ -243,6 +313,8 @@ fi
 
 AM_CONDITIONAL([SYSTEMD_SUPPORT_ENABLED], [test "x$systemd" = xyes ])
 AM_CONDITIONAL([GUI_QT5_ENABLED], [test "x$with_gui_qt5" = xyes ])
+AM_CONDITIONAL([DBUS_ENABLED], [test "x$with_dbus" = xyes ])
+AM_CONDITIONAL([POLICYKIT_ENABLED], [test "x$with_polkit" = xyes])
 
 AC_CONFIG_FILES([Makefile libusbguard.pc src/Tests/Makefile])
 AC_OUTPUT
@@ -261,6 +333,13 @@ echo "  libcap-ng: $libcap_ng_summary"
 echo "       json: $json_summary"
 echo "     spdlog: $spdlog_summary"
 echo "     Qt 5.x: $qt5_summary"
+echo " GLib D-Bus: $dbus_summary"
+echo
+echo "## Directories"
+echo
+echo " D-Bus System Services: $dbus_services_dir"
+echo "       D-Bus Busconfig: $dbus_busconfig_dir"
+echo "    PolicyKit Policies: $polkit_policy_dir"
 echo
 echo "## Compilation Flags"
 echo

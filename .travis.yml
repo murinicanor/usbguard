@@ -14,12 +14,16 @@ before_install:
 - sudo apt-get install -y libudev-dev libsodium-dev libqb-dev libcap-ng-dev libseccomp-dev
 - sudo apt-get install -y qtbase5-dev qt5-default qtbase5-dev-tools
 - sudo apt-get install -y lcov
+- sudo apt-get install -y clang
+- sudo apt-get install -y libglib2.0-dev libdbus-glib-1-dev libxml2-utils
+- sudo apt-get install -y libpolkit-gobject-1-dev
 - gem install coveralls-lcov
 before_script:
 - ./autogen.sh
-- ./configure --enable-coverage --disable-shared --disable-silent-rules
+- mkdir build && cd build
+- ../configure --enable-coverage --disable-shared --disable-silent-rules
 script:
-- make && make check
+- make && make check && make analyze-clang
 addons:
   coverity_scan:
     project:
@@ -33,3 +37,4 @@ addons:
 after_success:
 - lcov --compat-libtool --directory . --capture --output-file coverage.info
 - coveralls-lcov coverage.info
+
