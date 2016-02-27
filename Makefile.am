@@ -10,8 +10,6 @@ DISTCLEANFILES=
 CLEANFILES=
 
 if SYSTEMD_SUPPORT_ENABLED
-SYSTEMD_UNIT_DIR= /usr/lib/systemd/system
-
 install-data-hook:
 	mkdir -p $(DESTDIR)$(SYSTEMD_UNIT_DIR)
 	$(INSTALL) $(top_srcdir)/dist/usbguard.service \
@@ -237,16 +235,19 @@ sbin_PROGRAMS+= usbguard-dbus
 
 BUILT_SOURCES+=\
 	src/DBus/DBusInterface.xml.cstr \
-	src/DBus/org.usbguard.service
+	src/DBus/org.usbguard.service \
+	src/DBus/usbguard-dbus.service
 
 EXTRA_DIST+=\
 	src/DBus/org.usbguard.conf \
 	src/DBus/org.usbguard.service.in \
+	src/DBus/usbguard-dbus.service.in \
 	src/DBus/org.usbguard.policy \
 	src/DBus/DBusInterface.xml
 
 CLEANFILES+=\
 	$(top_builddir)/src/DBus/org.usbguard.service \
+	$(top_builddir)/src/DBus/usbguard-dbus.service \
 	$(top_builddir)/src/DBus/DBusInterface.xml.cstr
 
 usbguard_dbus_SOURCES=\
@@ -268,43 +269,68 @@ usbguard_dbus_LDADD=\
 	xmllint "$(top_srcdir)/$@" > /dev/null
 
 %.xml.cstr: %.xml
-	XMLLINT_INDENT="" xmllint --format "$<" |\
-	  sed -n -e 's|\"|\\"|g; s|.*|"&"|; p' > "$(top_builddir)/$@"
+	XMLLINT_INDENT="" xmllint --noblanks --format "$<" |\
+	  sed -n -e '/<!--/,/-->/ d; s|\"|\\"|g; s|.*|"&"|; p' > "$(top_builddir)/$@"
 
 %.service: %.service.in
 	sed -e "s|%{sbindir}%|$(sbindir)|" "$<" > "$(top_builddir)/$@"
 
-if POLICYKIT_ENABLED
-install-data-local: $(top_builddir)/src/DBus/org.usbguard.service
-	mkdir -p $(DESTDIR)$(POLKIT_POLICY_DIR) && \
-	  $(INSTALL_DATA) $(top_srcdir)/src/DBus/org.usbguard.policy $(DESTDIR)$(POLKIT_POLICY_DIR)
+install-data-local: $(top_builddir)/src/DBus/org.usbguard.service install-polkit-policy install-systemd-service
 	mkdir -p $(DESTDIR)$(DBUS_SERVICES_DIR) && \
 	  $(INSTALL_DATA) $(top_builddir)/src/DBus/org.usbguard.service $(DESTDIR)$(DBUS_SERVICES_DIR)
 	mkdir -p $(DESTDIR)$(DBUS_BUSCONFIG_DIR) && \
 	  $(INSTALL_DATA) $(top_srcdir)/src/DBus/org.usbguard.conf $(DESTDIR)$(DBUS_BUSCONFIG_DIR)
 
-uninstall-local:
+uninstall-local: uninstall-polkit-policy uninstall-systemd-service
 	rm -f $(DESTDIR)$(DBUS_SERVICES_DIR)/org.usbguard.service
 	rmdir $(DESTDIR)$(DBUS_SERVICES_DIR)
 	rm -f $(DESTDIR)$(DBUS_BUSCONFIG_DIR)/org.usbguard.conf
 	rmdir $(DESTDIR)$(DBUS_BUSCONFIG_DIR)
+
+dbus-docs: $(top_srcdir)/src/DBus/DBusInterface.xml
+#
+# Copy the input files to builddir because gdbus-codegen
+# doesn't provide an option to store the output files somewhere
+# else than in the directory where the input files are. And we
+# don't want to create files in the srcdir when building.
+#
+	mkdir -p "$(top_builddir)/src/DBus"
+	cp "$<" "$(top_builddir)/src/DBus/"
+	$(GDBUS_CODEGEN) --interface-prefix org.usbguard --generate-docbook=docbook \
+	  "$(top_builddir)/src/DBus/DBusInterface.xml"
+	for docbook in $(top_builddir)/docbook-org.usbguard.*.xml; do \
+	  $(XSLTPROC) -o "$$(basename -s .xml $$docbook).html" \
+	  "$(top_srcdir)/src/ThirdParty/xsl-stylesheets/xhtml-1_1/docbook.xsl" \
+	  "$(top_builddir)/$$docbook"; \
+	done
+
+if POLICYKIT_ENABLED
+install-polkit-policy:
+	mkdir -p $(DESTDIR)$(POLKIT_POLICY_DIR) && \
+	  $(INSTALL_DATA) $(top_srcdir)/src/DBus/org.usbguard.policy $(DESTDIR)$(POLKIT_POLICY_DIR)
+
+uninstall-polkit-policy:
 	rm -f $(DESTDIR)$(POLKIT_POLICY_DIR)/org.usbguard.policy
 	rmdir $(DESTDIR)$(POLKIT_POLICY_DIR)
 
 else
-install-data-local: $(top_builddir)/src/DBus/org.usbguard.service
-	mkdir -p $(DESTDIR)$(DBUS_SERVICES_DIR) && \
-	  $(INSTALL_DATA) $(top_builddir)/src/DBus/org.usbguard.service $(DESTDIR)$(DBUS_SERVICES_DIR)
-	mkdir -p $(DESTDIR)$(DBUS_BUSCONFIG_DIR) && \
-	  $(INSTALL_DATA) $(top_srcdir)/src/DBus/org.usbguard.conf $(DESTDIR)$(DBUS_BUSCONFIG_DIR)
+install-polkit-policy:
+uninstall-polkit-policy:
+endif
 
-uninstall-local:
-	rm -f $(DESTDIR)$(DBUS_SERVICES_DIR)/org.usbguard.service
-	rmdir $(DESTDIR)$(DBUS_SERVICES_DIR)
-	rm -f $(DESTDIR)$(DBUS_BUSCONFIG_DIR)/org.usbguard.conf
-	rmdir $(DESTDIR)$(DBUS_BUSCONFIG_DIR)
+if SYSTEMD_SUPPORT_ENABLED
+install-systemd-service: $(top_builddir)/src/DBus/usbguard-dbus.service
+	mkdir -p $(DESTDIR)$(SYSTEMD_UNIT_DIR) && \
+	  $(INSTALL_DATA) $(top_builddir)/src/DBus/usbguard-dbus.service $(DESTDIR)$(SYSTEMD_UNIT_DIR)
 
-endif #POLICYKIT_ENABLED
+uninstall-systemd-service:
+	rm -f $(DESTDIR)$(SYSTEMD_UNIT_DIR)/usbguard-dbus.service
+	rmdir $(DESTDIR)$(SYSTEMD_UNIT_DIR)
+
+else
+install-systemd-service:
+uninstall-systemd-service:
+endif
 endif #DBUS_ENABLED
 
 #
@@ -314,7 +340,7 @@ if GUI_QT5_ENABLED
 bin_PROGRAMS+= usbguard-applet-qt
 
 desktopdir = $(datadir)/applications
-desktop_DATA = src/GUI.Qt5/usbguard-applet-qt.desktop
+desktop_DATA = $(top_builddir)/src/GUI.Qt5/usbguard-applet-qt.desktop
 
 appicondir = $(datadir)/icons/hicolor/scalable/apps
 appicon_DATA = src/GUI.Qt5/resources/usbguard-icon.svg
@@ -337,7 +363,7 @@ BUILT_SOURCES+=\
 EXTRA_DIST+=\
 	src/GUI.Qt5/DeviceDialog.ui \
 	src/GUI.Qt5/MainWindow.ui \
-	src/GUI.Qt5/usbguard-applet-qt.desktop \
+	src/GUI.Qt5/usbguard-applet-qt.desktop.in \
 	$(usbguard_applet_qt_RESOURCES)
 
 CLEANFILES +=\
@@ -394,7 +420,8 @@ usbguard_applet_qt_CPPFLAGS=\
 
 endif
 
-srpm: dist
+rpmbuild: dist
+	test -n "$(RPMBUILD_FLAGS)"
 	$(eval RPMBUILD_ROOT:=$(shell mktemp -d -t usbguard-srpm.XXXXXX))
 	$(eval RPMBUILD_SOURCES:=$(RPMBUILD_ROOT)/SOURCE)
 	$(eval RPMBUILD_SPECS:=$(RPMBUILD_ROOT)/SPECS)
@@ -404,7 +431,7 @@ srpm: dist
 	cp $(top_srcdir)/dist/usbguard-daemon.conf $(RPMBUILD_SOURCES)
 	cp $(top_srcdir)/dist/usbguard.spec $(RPMBUILD_SPECS)
 	cp $(top_builddir)/usbguard-*.tar.gz $(RPMBUILD_SOURCES)
-	rpmbuild -bs \
+	rpmbuild $(RPMBUILD_FLAGS) \
 		--define "_sourcedir $(RPMBUILD_SOURCES)" \
 		--define "_srcrpmdir $(top_builddir)" \
 		--define "_rpmdir $(top_builddir)" \
@@ -412,10 +439,16 @@ srpm: dist
 		"$(RPMBUILD_SPECS)/usbguard.spec"
 	rm -rf "$(RPMBUILD_ROOT)"
 
+rpmbuild-bs:
+	$(MAKE) rpmbuild RPMBUILD_FLAGS=-bs
+
+rpmbuild-ba:
+	$(MAKE) rpmbuild RPMBUILD_FLAGS=-ba
+
 analyze-clang:
 	$(eval ANALYSIS_ROOT:=$(shell mktemp -d -t usbguard-analyze-clang.XXXXXX))
 	$(eval JOBS:=$(shell grep -c '^processor' /proc/cpuinfo 2> /dev/null || echo 1))
-	cd "$(ANALYSIS_ROOT)" && scan-build $(abs_top_srcdir)/configure
+	cd "$(ANALYSIS_ROOT)" && scan-build $(abs_top_srcdir)/configure $(ANALYZE_CONFIGURE_ARGS)
 	cd "$(ANALYSIS_ROOT)" && scan-build \
 	  --status-bugs -maxloop 8 -disable-checker deadcode.DeadStores -o "$(abs_top_builddir)" \
 	  make -j$(JOBS)

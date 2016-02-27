@@ -10,8 +10,8 @@ namespace usbguard
 
   static const struct ::option options_long[] = {
     { "help", no_argument, nullptr, 'h' },
-    { "blocked", no_argument, nullptr, 'a' },
-    { "allowed", no_argument, nullptr, 'b' },
+    { "blocked", no_argument, nullptr, 'b' },
+    { "allowed", no_argument, nullptr, 'a' },
     { nullptr, 0, nullptr, 0 }
   };
 
@@ -65,7 +65,7 @@ namespace usbguard
     usbguard::IPCClient ipc(/*connected=*/true);
 
     for (auto device_rule : ipc.listDevices(query)) {
-      std::cout << device_rule.getSeqn() << ": " << device_rule.toString() << std::endl;
+      std::cout << device_rule.getID() << ": " << device_rule.toString() << std::endl;
     }
 
     return EXIT_SUCCESS;

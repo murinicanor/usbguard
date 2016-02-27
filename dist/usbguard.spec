@@ -2,7 +2,7 @@
 
 Name:           usbguard
 Version:        0.5
-Release:        1%{?dist}
+Release:        3%{?dist}
 Summary:        A tool for implementing USB device usage policy
 Group:          System Environment/Daemons
 License:        GPLv2+
@@ -161,8 +161,19 @@ find %{buildroot} -name '*.la' -exec rm -f {} ';'
 %{_datadir}/dbus-1/system-services/org.usbguard.service
 %{_datadir}/dbus-1/system.d/org.usbguard.conf
 %{_datadir}/polkit-1/actions/org.usbguard.policy
+%{_unitdir}/usbguard-dbus.service
+
+%preun dbus
+%systemd_preun usbguard-dbus.service
+
+%post dbus
+%systemd_post usbguard-dbus.service
+
+%postun dbus
+%systemd_postun_with_restart usbguard-dbus.service
+
 
 %changelog
-* Mon Feb 22 2016 Daniel Kopecek <dkopecek@redhat.com> 0.5-1
+* Mon Feb 22 2016 Daniel Kopecek <dkopecek@redhat.com> 0.5-3
 - Update to version 0.5
 

@@ -204,7 +204,21 @@ if test "x$with_dbus" = xyes; then
   #
   AC_CHECK_PROGS(XMLLINT, [xmllint])
   if test -z "$XMLLINT" ; then
-    AC_MSG_FAILURE([The required xmllint tool missing on your system. Make sure that xmllint is installed.])
+    AC_MSG_FAILURE([The required xmllint tool is missing on your system. Make sure that xmllint is installed.])
+  fi
+  #
+  # Check for xsltproc tool
+  #
+  AC_CHECK_PROGS(XSLTPROC, [xsltproc])
+  if test -z "$XSLTPROC"; then
+    AC_MSG_FAILURE([The required xsltproc tool is missing on your system. Make sure that xsltproc is installed.])
+  fi
+  #
+  # Check for gdbus-codegen tool
+  #
+  AC_CHECK_PROGS(GDBUS_CODEGEN, [gdbus-codegen])
+  if test -z "$GDBUS_CODEGEN"; then
+    AC_MSG_FAILURE([The required gdbus-codegen tool is missing on your system. Make sure that gdbus-codegen is installed.])
   fi
 
   dbus_services_dir=`$PKG_CONFIG dbus-1 --define-variable=datadir='${datadir}' --define-variable=prefix='${prefix}' --variable=system_bus_services_dir`
@@ -225,14 +239,14 @@ if test "x$with_dbus" = xyes; then
   fi
 else
   dbus_summary="None; building without DBus support"
-  dbus_services_dir=" -"
-  dbus_busconfig_dir=" -"
+  dbus_services_dir="-"
+  dbus_busconfig_dir="-"
 fi
 
 #
 # PolicyKit
 #
-AC_ARG_WITH([polkit], AC_HELP_STRING([--with-polkit], [Install the PolicyKit configuration with if D-Bus support is also enabled]), [], [with_polkit=yes])
+AC_ARG_WITH([polkit], AC_HELP_STRING([--with-polkit], [Install the PolicyKit configuration if D-Bus support is also enabled]), [], [with_polkit=yes])
 if test "x$with_polkit" = xyes; then
   #
   # Check for required PolicyKit modules
@@ -252,7 +266,7 @@ if test "x$with_polkit" = xyes; then
   fi
 else
   polkit_summary="None; building without PolicyKit support"
-  polkit_policy_dir=" -"
+  polkit_policy_dir="-"
 fi
 
 # Checks for header files.
@@ -308,15 +322,27 @@ else
 fi
 
 if test "x$systemd" = xyes; then
+   systemd_unit_dir="`$PKG_CONFIG systemd --variable=systemdsystemunitdir`"
+   if test "x$systemd_unit_dir" = x; then
+     AC_MSG_FAILURE([Cannot detect the systemd system unit dir])
+   fi
+   AC_SUBST(SYSTEMD_UNIT_DIR, $systemd_unit_dir)
    AC_DEFINE([SYSTEMD_SUPPORT_ENABLED], [1], [Enable systemd support int the project])
+else
+  systemd_unit_dir="-"
 fi
+
+AC_SUBST(ANALYZE_CONFIGURE_ARGS, $ac_configure_args)
 
 AM_CONDITIONAL([SYSTEMD_SUPPORT_ENABLED], [test "x$systemd" = xyes ])
 AM_CONDITIONAL([GUI_QT5_ENABLED], [test "x$with_gui_qt5" = xyes ])
 AM_CONDITIONAL([DBUS_ENABLED], [test "x$with_dbus" = xyes ])
 AM_CONDITIONAL([POLICYKIT_ENABLED], [test "x$with_polkit" = xyes])
 
-AC_CONFIG_FILES([Makefile libusbguard.pc src/Tests/Makefile])
+AC_CONFIG_FILES([Makefile
+                 src/Tests/Makefile
+                 libusbguard.pc
+                 src/GUI.Qt5/usbguard-applet-qt.desktop])
 AC_OUTPUT
 
 echo
@@ -340,6 +366,7 @@ echo
 echo " D-Bus System Services: $dbus_services_dir"
 echo "       D-Bus Busconfig: $dbus_busconfig_dir"
 echo "    PolicyKit Policies: $polkit_policy_dir"
+echo "      systemd unit dir: $systemd_unit_dir"
 echo
 echo "## Compilation Flags"
 echo
