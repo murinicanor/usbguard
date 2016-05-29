@@ -454,3 +454,5 @@ analyze-clang:
 	  make -j$(JOBS)
 	rm -rf "$(ANALYSIS_ROOT)"
 
+doc/%.roff: doc/%.ronn
+	ronn --roff --pipe $^ > $@
