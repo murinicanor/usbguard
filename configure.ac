@@ -269,6 +269,16 @@ else
   polkit_policy_dir="-"
 fi
 
+#
+# Manpage generation
+#
+AC_CHECK_PROGS(RONN, [ronn])
+if test -z "$RONN";
+  then AC_MSG_WARN([Ronn not found - continuing without generating manpages])
+fi
+AM_CONDITIONAL([HAVE_RONN], [test -n "$RONN"])
+
+
 # Checks for header files.
 AC_FUNC_ALLOCA
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h inttypes.h limits.h locale.h netdb.h stdint.h stdlib.h string.h sys/time.h syslog.h unistd.h wchar.h])
